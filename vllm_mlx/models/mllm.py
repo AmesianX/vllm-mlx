@@ -740,6 +740,14 @@ class MLXMultimodalLM:
             logger.error(f"Failed to load MLLM: {e}")
             raise
 
+    def get_language_model(self):
+        """Extract the underlying language model for mlx_lm TextModel construction."""
+        return self.model.language_model
+
+    def get_tokenizer(self):
+        """Get the text tokenizer (not the multimodal processor)."""
+        return self.processor.tokenizer
+
     def _prepare_images(self, images: list) -> list[str]:
         """Process image inputs and return local file paths."""
         processed = []
@@ -1152,12 +1160,20 @@ class MLXMultimodalLM:
             logger.info(
                 f"  Chat msg {i}: role={cm['role']}, content={content_preview}..."
             )
+
+        # Pop tools so they don't leak into mlx_vlm.generate()/stream_generate()
+        tools = kwargs.pop("tools", None)
+        template_extra_kwargs = {}
+        if tools:
+            template_extra_kwargs["tools"] = tools
+
         try:
             # Use get_chat_template directly since messages are already properly formatted
             formatted_prompt = get_chat_template(
                 self.processor,
                 chat_messages,
                 add_generation_prompt=True,
+                **template_extra_kwargs,
             )
         except Exception as e:
             logger.warning(
@@ -1504,12 +1520,19 @@ class MLXMultimodalLM:
             all_images.extend(frames)
 
         # Apply chat template directly - messages are already properly structured
+        # Pop tools so they don't leak into mlx_vlm.generate()/stream_generate()
+        tools = kwargs.pop("tools", None)
+        template_extra_kwargs = {}
+        if tools:
+            template_extra_kwargs["tools"] = tools
+
         try:
             # Use get_chat_template directly since messages are already properly formatted
             formatted_prompt = get_chat_template(
                 self.processor,
                 chat_messages,
                 add_generation_prompt=True,
+                **template_extra_kwargs,
             )
         except Exception as e:
             logger.warning(
